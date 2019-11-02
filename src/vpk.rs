@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-
 use crate::vpk_nom::{
     header, other_md5_section, read_directory, read_entries, sections, ExtensionLayer, Header,
 };
+
+//Everything that has been developed here was based off of documentation
+//from here: https://developer.valvesoftware.com/wiki/VPK_File_Format
+//most of the parsing is done in vpk_nom. 
+//So if you want to change aspects of parsing go there.
+//This is just the glue for vpk_nom
 
 #[derive(Debug)]
 pub enum ReadError {

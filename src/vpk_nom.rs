@@ -1,9 +1,13 @@
-
 use nom::number::Endianness;
 use nom::{
     count, do_parse, many_till, map, map_res, named, preceded, switch, take, tuple,
     u16, u32, verify, take_till, named_args, many0, complete,
 };
+
+//This is where the heart of the parser is. 
+//Data flows in here, get's converted and spit back out.
+//Read up the nom docs to understand what the majority of this does.
+//TODO: add descriptive comments to this stuff to make it more legable.
 
 #[derive(Debug)]
 pub struct V1Header {
