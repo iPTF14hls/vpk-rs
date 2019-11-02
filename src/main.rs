@@ -1,7 +1,6 @@
 mod vpk;
+mod vpk_nom;
 mod bin_pack;
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 
 use crate::vpk::vpk_from_file;
