@@ -9,5 +9,4 @@ edition = "2018"
 [dependencies]
 nom = "5.0.1"
 sorted-vec = "0.3.2"
-regex = "*"
 md5 = "0.6.1"

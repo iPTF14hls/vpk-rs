@@ -54,13 +54,12 @@ impl<'a> IncomingVpk<'a> {
                     data
                 } else {
                     //First we need to get the file we're looking for.
-                    use regex::Regex;
-                    let re = Regex::new(r"(.+)_dir\.vpk").unwrap();
-                    let filename = self.path.file_name().unwrap().to_str().unwrap();
+                    let filename = self.path.file_stem().unwrap().to_str().unwrap();
                     let dir = self.path.parent().unwrap();
-                    let beginning = re.captures_iter(filename).next().unwrap();
-                    let new_name = format!("{}_{:03}.vpk", &beginning[1], i);
+                    let name = filename.replace("_dir", "");
+                    let new_name = format!("{}_{:03}.vpk", name, i);
                     let new_file = dir.join(new_name.as_str());
+
                     //Now we have that file, we can get the data from within it.
                     let buffer: Option<Rc<[u8]>> = if let Ok(mut file) = File::open(new_file) {
                         let mut buffer = Vec::<u8>::new();
