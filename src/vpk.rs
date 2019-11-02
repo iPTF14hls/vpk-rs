@@ -46,22 +46,12 @@ impl<'a> IncomingVpk<'a> {
             cached_data: HashMap::new(),
         }
     }
-    pub fn archive_data(&mut self, index: u32) -> Option<Rc<[u8]>> {
+    pub fn get_archive_data(&mut self, index: u32) -> Option<Rc<[u8]>> {
         match index {
             0x7fff => Some(self.file_data.clone()),
             i => {
-                let data = {
-                    match self.cached_data.get(&index) {
-                        Some(data) => Some(data.clone()),
-                        None => None,
-                    }
-                };
-                if let Some(data) = data {
-                    if let Some(reference) = data {
-                        Some(reference)
-                    } else {
-                        None
-                    }
+                if let Some(data) = self.cached_data.get(&index).cloned() {
+                    data
                 } else {
                     //First we need to get the file we're looking for.
                     use regex::Regex;
@@ -130,7 +120,7 @@ pub fn vpk_from_file(path: &Path) -> Result<IncomingVpk, ReadError> {
     //We check the archives to see whats up
     let (_, entries) = read_entries(archive_md5)?;
     for entry in entries {
-        let data = ivpk.archive_data(entry.archive_index).unwrap();
+        let data = ivpk.get_archive_data(entry.archive_index).unwrap();
         let (s, e) = (
             entry.starting_offset as usize,
             (entry.starting_offset + entry.count) as usize,
