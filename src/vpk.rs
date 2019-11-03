@@ -41,7 +41,7 @@ pub struct IncomingVpk<'a> {
     archive_md5_checksum: [u8; 16],
 }
 #[derive(Debug)]
-struct HashCompair {
+pub struct HashCompair {
     expect: [u8; 16],
     got: [u8; 16],
 }
