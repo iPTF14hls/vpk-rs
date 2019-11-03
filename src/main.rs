@@ -11,6 +11,7 @@ fn main() {
     let path =  "./test-samples/t0/hl2_misc_dir.vpk";
     let path = Path::new(&path);
 
-    let vpk = vpk_from_file(path).unwrap();
+    let mut vpk = vpk_from_file(path).unwrap();
     println!("{:?}", vpk.directory);
+    println!("Integrity check: {:?}", vpk.integrity_check());
 }

@@ -137,17 +137,18 @@ named!(
     terminator<u16>,
     verify!(u16!(Endianness::Little), |val: &u16| *val == 0xffff)
 );
+
 named!(
     dir_data<(u32, u16, u32, u32, &[u8])>,
     do_parse!(
-        crc: u32!(Endianness::Little)
-            >> preload_bytes: u16!(Endianness::Little)
-            >> archive_index: u16!(Endianness::Little)
-            >> entry_offset: u32!(Endianness::Little)
-            >> entry_length: u32!(Endianness::Little)
-            >> _terminator: terminator
-            >> pre_loaded: take!(preload_bytes)
-            >> ((crc, archive_index, entry_offset, entry_length, pre_loaded))
+        crc: u32!(Endianness::Little) >> 
+        preload_bytes: u16!(Endianness::Little) >> 
+        archive_index: u16!(Endianness::Little) >> 
+        entry_offset: u32!(Endianness::Little) >> 
+        entry_length: u32!(Endianness::Little) >> 
+        _terminator: terminator >> 
+        pre_loaded: take!(preload_bytes) >> 
+        ((crc, archive_index, entry_offset, entry_length, pre_loaded))
     )
 );
 

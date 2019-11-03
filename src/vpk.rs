@@ -35,15 +35,41 @@ pub struct IncomingVpk<'a> {
     pub directory: ExtensionLayer,
     file_data: Rc<[u8]>,
     cached_data: HashMap<u32, Option<Rc<[u8]>>>,
+    archive_md5: Box<[u8]>, 
+    other_md5: Box<[u8]>, 
+    tree_checksum: [u8; 16], 
+    archive_md5_checksum: [u8; 16],
+}
+#[derive(Debug)]
+struct HashCompair {
+    expect: [u8; 16],
+    got: [u8; 16],
+}
+#[derive(Debug)]
+pub enum IntegrityError {
+    Nom,
+    Mismatch(Vec<HashMismatch>),
+}
+#[derive(Debug)]
+pub enum HashMismatch {
+    Data((u32, HashCompair)), 
+    Other(HashCompair),
+}
+
+impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for IntegrityError {
+    fn from(_: nom::Err<(&[u8], nom::error::ErrorKind)>) -> IntegrityError {
+        IntegrityError::Nom
+    }
 }
 
 impl<'a> IncomingVpk<'a> {
-    pub fn new(path: &'a Path, directory: ExtensionLayer, file_data: Vec<u8>) -> Self {
+    pub fn new(path: &'a Path, directory: ExtensionLayer, file_data: Vec<u8>, archive_md5: Box<[u8]>, other_md5: Box<[u8]>, tree_checksum: [u8; 16], archive_md5_checksum: [u8; 16]) -> Self {
         IncomingVpk {
             path,
             directory,
             file_data: Rc::from(file_data.into_boxed_slice()),
             cached_data: HashMap::new(),
+            archive_md5, other_md5, tree_checksum, archive_md5_checksum,
         }
     }
     pub fn get_archive_data(&mut self, index: u32) -> Option<Rc<[u8]>> {
@@ -73,6 +99,78 @@ impl<'a> IncomingVpk<'a> {
                     buffer
                 }
             }
+        }
+    }
+
+    pub fn integrity_check(&mut self) -> Result<(), IntegrityError> {
+        use md5::compute;
+        //We check the archives to see whats up
+        let (_, entries) = {
+            let archive_md5 = &self.archive_md5[..];
+            read_entries(archive_md5)?
+        };
+
+        //We want to know EVERY failure that happens in here.
+        let mut failures = Vec::new();
+
+        for entry in entries {
+            let data = self.get_archive_data(entry.archive_index).unwrap();
+            let (s, e) = (
+                entry.starting_offset as usize,
+                (entry.starting_offset + entry.count) as usize,
+            );
+            let slice = &data[s..e];
+            let hash = compute(slice).0;
+            if entry
+                .md5_checksum
+                .iter()
+                .zip(hash.iter())
+                .any(|(a, b)| a != b)
+            {
+                failures.push(HashMismatch::Data((
+                    entry.archive_index,
+                    HashCompair {
+                        expect: entry.md5_checksum,
+                        got: hash,
+                    }
+                )));
+            }
+        }
+
+        let (other_md5, tree_checksum, archive_md5_checksum) = (&self.other_md5[..], self.tree_checksum, self.archive_md5_checksum);
+        
+        if !other_md5.is_empty() {
+            let (_, checksums) = other_md5_section(other_md5)?;
+            if checksums
+                .tree_checksum
+                .iter()
+                .zip(tree_checksum.iter())
+                .any(|(a, b)| a != b)
+            {
+                failures.push(HashMismatch::Other(HashCompair {
+                    expect: checksums.tree_checksum,
+                    got: tree_checksum
+                }
+                ));
+            }
+            if checksums
+                .archive_md5_section_checksum
+                .iter()
+                .zip(archive_md5_checksum.iter())
+                .any(|(a, b)| a != b)
+            {
+                failures.push(HashMismatch::Other(HashCompair {
+                    expect: checksums.archive_md5_section_checksum,
+                    got: archive_md5_checksum,
+                }));
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        }
+        else {
+            Err(IntegrityError::Mismatch(failures))
         }
     }
 }
@@ -115,56 +213,7 @@ pub fn vpk_from_file(path: &Path) -> Result<IncomingVpk, ReadError> {
         sections(buff, ts, fdss, ams, omss, sss)?;
     let (tree_checksum, archive_md5_checksum) = (compute(tree).0, compute(archive_md5).0);
     let (_, directory) = read_directory(tree)?;
-    let mut ivpk = IncomingVpk::new(path, directory, Vec::from(file_data));
-    //We check the archives to see whats up
-    let (_, entries) = read_entries(archive_md5)?;
-    for entry in entries {
-        let data = ivpk.get_archive_data(entry.archive_index).unwrap();
-        let (s, e) = (
-            entry.starting_offset as usize,
-            (entry.starting_offset + entry.count) as usize,
-        );
-        let slice = &data[s..e];
-        let hash = compute(slice).0;
-        if entry
-            .md5_checksum
-            .iter()
-            .zip(hash.iter())
-            .any(|(a, b)| a != b)
-        {
-            return Err(ReadError::DataChecksum((
-                entry.archive_index,
-                entry.md5_checksum,
-                hash,
-            )));
-        }
-    }
-
-    if !other_md5.is_empty() {
-        let (_, checksums) = other_md5_section(other_md5)?;
-        if checksums
-            .tree_checksum
-            .iter()
-            .zip(tree_checksum.iter())
-            .any(|(a, b)| a != b)
-        {
-            return Err(ReadError::OtherChecksum((
-                checksums.tree_checksum,
-                tree_checksum,
-            )));
-        }
-        if checksums
-            .archive_md5_section_checksum
-            .iter()
-            .zip(archive_md5_checksum.iter())
-            .any(|(a, b)| a != b)
-        {
-            return Err(ReadError::OtherChecksum((
-                checksums.archive_md5_section_checksum,
-                archive_md5_checksum,
-            )));
-        }
-    }
+    let ivpk = IncomingVpk::new(path, directory, Vec::from(file_data), Box::from(archive_md5), Box::from(other_md5), tree_checksum, archive_md5_checksum);
 
     Ok(ivpk)
 }
